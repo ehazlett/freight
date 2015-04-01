@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+if [ -z "$1" ]; then
+    echo "Usage: $0 <version>"
+    exit 1
+fi
+
+VERSION=$1
+NAME=freight
+
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "GITHUB_TOKEN must be set for github-release"
+    exit 1
+fi
+
+echo "Cleaning"
+rm -rf $NAME_*
+
+echo "Building"
+script/build $VERSION
+
+echo "Generating sums"
+docker run --rm -v `pwd`:/go/src/github.com/ehazlett/$NAME -w /go/src/github.com/ehazlett/$NAME/$NAME $NAME-build ./script/generate-sums
+
+echo "Creating Tag"
+git tag $VERSION
+echo "Pushing tag"
+git push --tags
+
+echo "Creating Release"
+docker run --rm -e GITHUB_TOKEN $NAME-build github-release release \
+    --user ehazlett \
+    --repo $NAME \
+    --tag $VERSION \
+    --name $VERSION \
+    --description "" \
+    --pre-release
+
+for BINARY in $NAME_*; do
+    echo "Uploading $BINARY"
+    docker run --rm -e GITHUB_TOKEN -v `pwd`:/go/src/github.com/ehazlett/$NAME \
+        -w /go/src/github.com/ehazlett/$NAME/$NAME
+        $NAME-build github-release upload \
+        --user ehazlett \
+        --repo $NAME \
+        --tag $VERSION \
+        --name $BINARY \
+        --file $BINARY
+done
