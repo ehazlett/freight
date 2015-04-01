@@ -14,13 +14,13 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 echo "Cleaning"
-rm -rf $NAME_*
+rm -rf freight/freight_*
 
 echo "Building"
 script/build $VERSION
 
 echo "Generating sums"
-docker run --rm -v `pwd`:/go/src/github.com/ehazlett/$NAME -w /go/src/github.com/ehazlett/$NAME/$NAME $NAME-build ./script/generate-sums
+docker run --rm -v `pwd`:/go/src/github.com/ehazlett/$NAME -w /go/src/github.com/ehazlett/$NAME/$NAME $NAME-build ../script/generate-sums
 
 echo "Creating Tag"
 git tag $VERSION
@@ -36,10 +36,11 @@ docker run --rm -e GITHUB_TOKEN $NAME-build github-release release \
     --description "" \
     --pre-release
 
-for BINARY in $NAME_*; do
+pushd freight > /dev/null
+for BINARY in freight_*; do
     echo "Uploading $BINARY"
-    docker run --rm -e GITHUB_TOKEN -v `pwd`:/go/src/github.com/ehazlett/$NAME \
-        -w /go/src/github.com/ehazlett/$NAME/$NAME
+    docker run --rm -e GITHUB_TOKEN -v `pwd`:/go/src/github.com/ehazlett/freight/freight \
+        -w /go/src/github.com/ehazlett/$NAME/$NAME \
         $NAME-build github-release upload \
         --user ehazlett \
         --repo $NAME \
@@ -47,3 +48,5 @@ for BINARY in $NAME_*; do
         --name $BINARY \
         --file $BINARY
 done
+
+popd > /dev/null
