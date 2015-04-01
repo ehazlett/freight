@@ -6,12 +6,14 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/ehazlett/freight/commands"
+	"github.com/ehazlett/freight/version"
 )
 
 func main() {
 	app := cli.NewApp()
 	app.Name = "freight"
 	app.Usage = "apps being shipped"
+	app.Version = version.Version
 	app.Author = ""
 	app.Email = ""
 	app.Before = func(c *cli.Context) error {
