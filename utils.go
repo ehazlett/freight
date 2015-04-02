@@ -11,7 +11,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/samalba/dockerclient"
@@ -147,10 +149,22 @@ func GetClient(dockerUrl, tlsCaCert, tlsCert, tlsKey string, allowInsecure bool)
 		tlsConfig = cfg
 	}
 
+	log.Debugf("docker client: url=%s", dockerUrl)
+
 	client, err := dockerclient.NewDockerClient(dockerUrl, tlsConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	return client, nil
+}
+
+func FromUnixTimestamp(timestamp int64) (*time.Time, error) {
+	i, err := strconv.ParseInt("1405544146", 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	t := time.Unix(i, 0)
+	return &t, nil
 }

@@ -12,9 +12,9 @@ import (
 func main() {
 	app := cli.NewApp()
 	app.Name = "freight"
-	app.Usage = "apps being shipped"
-	app.Version = version.Version
-	app.Author = ""
+	app.Usage = "app deployment"
+	app.Version = version.Version + " (" + version.Gitcommit + ")"
+	app.Author = "@ehazlett"
 	app.Email = ""
 	app.Before = func(c *cli.Context) error {
 		if c.GlobalBool("debug") {
@@ -23,25 +23,16 @@ func main() {
 		return nil
 	}
 	app.Commands = []cli.Command{
-		{
-			Name:   "deploy",
-			Usage:  "ship it",
-			Action: commands.CmdDeploy,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "config, c",
-					Usage: "Freight config URL",
-					Value: "",
-				},
-				cli.IntFlag{
-					Name:  "instances, i",
-					Usage: "number of instances to deploy (overrides config)",
-					Value: -1,
-				},
-			},
-		},
+		commands.CmdDeploy,
+		commands.CmdLs,
+		commands.CmdRemove,
 	}
 	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "config, c",
+			Usage: "Freight config URL / path / Github repo",
+			Value: "freight.json",
+		},
 		cli.StringFlag{
 			Name:   "docker, d",
 			Value:  "unix:///var/run/docker.sock",

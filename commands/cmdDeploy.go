@@ -10,33 +10,52 @@ import (
 	"github.com/samalba/dockerclient"
 )
 
-var CmdDeploy = func(c *cli.Context) {
-	dockerUrl := c.GlobalString("docker")
-	tlsCaCert := c.GlobalString("tls-ca-cert")
-	tlsCert := c.GlobalString("tls-cert")
-	tlsKey := c.GlobalString("tls-key")
-	allowInsecure := c.GlobalBool("allow-insecure")
-	client, err := freight.GetClient(dockerUrl, tlsCaCert, tlsCert, tlsKey, allowInsecure)
+var CmdDeploy = cli.Command{
+	Name:   "deploy",
+	Usage:  "deploy an application",
+	Action: cmdDeploy,
+	Flags: []cli.Flag{
+		cli.IntFlag{
+			Name:  "instances, i",
+			Usage: "number of instances to deploy (overrides config)",
+			Value: -1,
+		},
+		cli.StringFlag{
+			Name:  "version, v",
+			Usage: "app version (overrides config)",
+			Value: "",
+		},
+	},
+}
+
+var cmdDeploy = func(c *cli.Context) {
+	client, err := getClient(c)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	instances := c.Int("instances")
+	version := c.String("version")
 
-	configPath := c.String("config")
+	configPath := c.GlobalString("config")
 
 	config, err := freight.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// config overrides
 	if instances == -1 {
 		instances = config.Instances
 	}
 
-	log.Infof("deploying: name=%s version=%s repo=%s", config.Name, config.Version, config.Repo)
+	if version == "" {
+		version = config.Version
+	}
 
-	imageName := config.Name
+	log.Infof("deploy: name=%s version=%s repo=%s", config.Name, version, config.Repo)
+
+	imageName := fmt.Sprintf("%s:%s", config.Name, version)
 
 	image := dockerclient.BuildImage{
 		Name:           imageName,
@@ -44,7 +63,8 @@ var CmdDeploy = func(c *cli.Context) {
 		DockerfilePath: config.DockerfilePath,
 	}
 
-	log.Debugf("building image: name=%s", config.Name)
+	log.Debugf("building image: name=%s version=%s", config.Name, version)
+
 	if err := client.BuildImage(image, nil); err != nil {
 		log.Fatal(err)
 	}
@@ -57,7 +77,7 @@ var CmdDeploy = func(c *cli.Context) {
 
 	cntEnv := config.Environment
 	cntEnv = append(cntEnv, fmt.Sprintf("FREIGHT_NAME=%s", config.Name))
-	cntEnv = append(cntEnv, fmt.Sprintf("FREIGHT_VERSION=%s", config.Version))
+	cntEnv = append(cntEnv, fmt.Sprintf("FREIGHT_VERSION=%s", version))
 
 	for i := 0; i < instances; i++ {
 		log.Debugf("starting instance: image=%s instance=%d", imageName, i)
@@ -92,6 +112,11 @@ var CmdDeploy = func(c *cli.Context) {
 			log.Fatal(err)
 		}
 
+		cId := cnt.Id[:12]
+
+		cName := ""
+		cVersion := ""
+
 		for _, v := range cntInfo.Config.Env {
 			// parse the env to get only the freight controlled containers
 			parts := strings.Split(v, "=")
@@ -102,20 +127,29 @@ var CmdDeploy = func(c *cli.Context) {
 			k := parts[0]
 			v := parts[1]
 
-			cId := cnt.Id[:12]
-			// only remove containers of the same name
-			if k == "FREIGHT_NAME" && v == config.Name {
-				if _, ok := newIds[cnt.Id]; !ok {
-					log.Debugf("removing container: id=%s image=%s", cId, cnt.Image)
-					if err := client.RemoveContainer(cnt.Id, true, true); err != nil {
-						log.Warnf("unable to remove container: id=%s image=%s", cId, cnt.Image)
-					}
-				}
-
-				break
+			if k == "FREIGHT_NAME" {
+				cName = v
+				continue
 			}
+
+			if k == "FREIGHT_VERSION" {
+				cVersion = v
+				continue
+			}
+
+		}
+
+		// only remove containers of the same name
+		if cName == config.Name && cVersion == version {
+			if _, ok := newIds[cnt.Id]; !ok {
+				log.Debugf("removing container: id=%s image=%s", cId, cnt.Image)
+				if err := client.RemoveContainer(cnt.Id, true, true); err != nil {
+					log.Warnf("unable to remove container: id=%s image=%s", cId, cnt.Image)
+				}
+			}
+
 		}
 	}
 
-	log.Infof("successfully deployed name=%s version=%s", config.Name, config.Version)
+	log.Infof("successfully deployed name=%s version=%s", config.Name, version)
 }
