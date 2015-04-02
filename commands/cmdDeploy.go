@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -25,6 +24,16 @@ var CmdDeploy = cli.Command{
 			Usage: "app version (overrides config)",
 			Value: "",
 		},
+		cli.StringFlag{
+			Name:  "hostname",
+			Usage: "hostname (overrides config)",
+			Value: "",
+		},
+		cli.StringFlag{
+			Name:  "domainname",
+			Usage: "domain name (overrides config)",
+			Value: "",
+		},
 	},
 }
 
@@ -36,6 +45,8 @@ var cmdDeploy = func(c *cli.Context) {
 
 	instances := c.Int("instances")
 	version := c.String("version")
+	hostname := c.String("hostname")
+	domainname := c.String("domainname")
 
 	configPath := c.GlobalString("config")
 
@@ -51,6 +62,14 @@ var cmdDeploy = func(c *cli.Context) {
 
 	if version == "" {
 		version = config.Version
+	}
+
+	if hostname == "" {
+		hostname = config.Hostname
+	}
+
+	if domainname == "" {
+		domainname = config.Domainname
 	}
 
 	log.Infof("deploy: name=%s version=%s repo=%s", config.Name, version, config.Repo)
@@ -83,9 +102,11 @@ var cmdDeploy = func(c *cli.Context) {
 		log.Debugf("starting instance: image=%s instance=%d", imageName, i)
 		// inject env vars
 		containerConfig := &dockerclient.ContainerConfig{
-			Image:  imageName,
-			Env:    cntEnv,
-			Labels: config.Labels,
+			Hostname:   hostname,
+			Domainname: domainname,
+			Image:      imageName,
+			Env:        cntEnv,
+			Labels:     config.Labels,
 		}
 
 		id, err := client.CreateContainer(containerConfig, "")
@@ -98,57 +119,6 @@ var cmdDeploy = func(c *cli.Context) {
 		}
 
 		newIds[id] = true
-	}
-
-	// remove old containers
-	containers, err := client.ListContainers(true, false, "")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, cnt := range containers {
-		cntInfo, err := client.InspectContainer(cnt.Id)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		cId := cnt.Id[:12]
-
-		cName := ""
-		cVersion := ""
-
-		for _, v := range cntInfo.Config.Env {
-			// parse the env to get only the freight controlled containers
-			parts := strings.Split(v, "=")
-			if len(parts) != 2 {
-				continue
-			}
-
-			k := parts[0]
-			v := parts[1]
-
-			if k == "FREIGHT_NAME" {
-				cName = v
-				continue
-			}
-
-			if k == "FREIGHT_VERSION" {
-				cVersion = v
-				continue
-			}
-
-		}
-
-		// only remove containers of the same name
-		if cName == config.Name && cVersion == version {
-			if _, ok := newIds[cnt.Id]; !ok {
-				log.Debugf("removing container: id=%s image=%s", cId, cnt.Image)
-				if err := client.RemoveContainer(cnt.Id, true, true); err != nil {
-					log.Warnf("unable to remove container: id=%s image=%s", cId, cnt.Image)
-				}
-			}
-
-		}
 	}
 
 	log.Infof("successfully deployed name=%s version=%s", config.Name, version)
