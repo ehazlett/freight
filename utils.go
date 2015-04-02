@@ -3,13 +3,86 @@ package freight
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/samalba/dockerclient"
 )
+
+func getReaderFromPath(configPath string) (io.Reader, error) {
+	var (
+		rdr io.Reader
+	)
+
+	isHttp := false
+
+	if strings.Index(configPath, "http") != -1 {
+		isHttp = true
+	}
+
+	// check for github url
+	if strings.Index(configPath, "github.com") != -1 && strings.Index(configPath, "freight.json") == -1 {
+		configPath = fmt.Sprintf("https://%s", path.Join(configPath, "raw", "master", "freight.json"))
+		isHttp = true
+	}
+
+	if isHttp {
+		log.Debugf("loading config from http")
+		r, err := http.Get(configPath)
+		if err != nil {
+			return nil, err
+		}
+
+		if r.StatusCode != 200 {
+			content, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Debug(string(content))
+			return nil, fmt.Errorf("cannot load configuration: status=%d", r.StatusCode)
+		}
+
+		rdr = r.Body
+	} else {
+		log.Debugf("loading config from file")
+		f, err := os.Open(configPath)
+		if err != nil {
+			return nil, err
+		}
+
+		rdr = f
+	}
+
+	return rdr, nil
+}
+
+func LoadConfig(path string) (*Config, error) {
+	// load config
+	r, err := getReaderFromPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if r == nil {
+		return nil, fmt.Errorf("unable to load config:  unable to get reader from path")
+	}
+
+	var config *Config
+	if err := json.NewDecoder(r).Decode(&config); err != nil {
+		log.Fatal(err)
+	}
+
+	return config, nil
+}
 
 func GetTLSConfig(caCert, cert, key []byte, allowInsecure bool) (*tls.Config, error) {
 	// TLS config

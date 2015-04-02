@@ -1,10 +1,7 @@
 package commands
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -24,26 +21,17 @@ var CmdDeploy = func(c *cli.Context) {
 		log.Fatal(err)
 	}
 
+	instances := c.Int("instances")
+
 	configPath := c.String("config")
-	// load config
-	r, err := http.Get(configPath)
+
+	config, err := freight.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if r.StatusCode != 200 {
-		content, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Debug(string(content))
-		log.Fatalf("cannot load configuration: status=%d", r.StatusCode)
-	}
-
-	var config freight.Config
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
-		log.Fatal(err)
+	if instances == -1 {
+		instances = config.Instances
 	}
 
 	log.Infof("deploying: name=%s version=%s repo=%s", config.Name, config.Version, config.Repo)
@@ -71,7 +59,7 @@ var CmdDeploy = func(c *cli.Context) {
 	cntEnv = append(cntEnv, fmt.Sprintf("FREIGHT_NAME=%s", config.Name))
 	cntEnv = append(cntEnv, fmt.Sprintf("FREIGHT_VERSION=%s", config.Version))
 
-	for i := 0; i < config.Instances; i++ {
+	for i := 0; i < instances; i++ {
 		log.Debugf("starting instance: image=%s instance=%d", imageName, i)
 		// inject env vars
 		containerConfig := &dockerclient.ContainerConfig{

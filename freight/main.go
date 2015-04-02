@@ -33,6 +33,11 @@ func main() {
 					Usage: "Freight config URL",
 					Value: "",
 				},
+				cli.IntFlag{
+					Name:  "instances, i",
+					Usage: "number of instances to deploy (overrides config)",
+					Value: -1,
+				},
 			},
 		},
 	}
