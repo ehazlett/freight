@@ -2,6 +2,8 @@ package freight
 
 type Config struct {
 	Name            string            `json:"name,omitempty"`
+	Image           string            `json:"image,omitempty"`
+	BuildImage      bool              `json:"build_image,omitempty"`
 	Version         string            `json:"version,omitempty"`
 	Repo            string            `json:"repo,omitempty"`
 	Labels          map[string]string `json:"labels,omitempty"`

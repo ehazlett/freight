@@ -30,7 +30,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "config, c",
-			Usage: "Freight config URL / path / Github repo",
+			Usage: "freight config url / path / github repo",
 			Value: "freight.json",
 		},
 		cli.StringFlag{

@@ -34,6 +34,28 @@ var CmdDeploy = cli.Command{
 			Usage: "domain name (overrides config)",
 			Value: "",
 		},
+		cli.StringFlag{
+			Name:   "auth-username",
+			Usage:  "Registry auth username",
+			Value:  "",
+			EnvVar: "FREIGHT_AUTH_USERNAME",
+		},
+		cli.StringFlag{
+			Name:   "auth-password",
+			Usage:  "Registry auth password",
+			Value:  "",
+			EnvVar: "FREIGHT_AUTH_PASSWORD",
+		},
+		cli.StringFlag{
+			Name:   "auth-email",
+			Usage:  "Registry auth email",
+			Value:  "",
+			EnvVar: "FREIGHT_AUTH_EMAIL",
+		},
+		cli.BoolFlag{
+			Name:  "force-build, b",
+			Usage: "force building image from repo",
+		},
 	},
 }
 
@@ -47,6 +69,10 @@ var cmdDeploy = func(c *cli.Context) {
 	version := c.String("version")
 	hostname := c.String("hostname")
 	domainname := c.String("domainname")
+	authUsername := c.String("auth-username")
+	authPassword := c.String("auth-password")
+	authEmail := c.String("auth-email")
+	forceBuild := c.Bool("force-build")
 
 	configPath := c.GlobalString("config")
 
@@ -72,20 +98,39 @@ var cmdDeploy = func(c *cli.Context) {
 		domainname = config.Domainname
 	}
 
-	log.Infof("deploy: name=%s version=%s repo=%s", config.Name, version, config.Repo)
+	log.Infof("deploy: name=%s image=%s version=%s repo=%s", config.Name, config.Image, version, config.Repo)
 
-	imageName := fmt.Sprintf("%s:%s", config.Name, version)
+	imageName := fmt.Sprintf("%s:%s", config.Image, version)
 
-	image := dockerclient.BuildImage{
-		Name:           imageName,
-		Remote:         config.Repo,
-		DockerfilePath: config.DockerfilePath,
-	}
+	if config.BuildImage || forceBuild {
+		image := dockerclient.BuildImage{
+			Name:           imageName,
+			Remote:         config.Repo,
+			DockerfilePath: config.DockerfilePath,
+		}
 
-	log.Debugf("building image: name=%s version=%s", config.Name, version)
+		log.Debugf("building: image=%s", imageName)
 
-	if err := client.BuildImage(image, nil); err != nil {
-		log.Fatal(err)
+		if err := client.BuildImage(image, nil); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		var authConfig *dockerclient.AuthConfig
+
+		if authUsername != "" && authPassword != "" {
+
+			authConfig = &dockerclient.AuthConfig{
+				Username: authUsername,
+				Password: authPassword,
+				Email:    authEmail,
+			}
+		}
+
+		log.Debugf("pulling: image=%s", imageName)
+
+		if err := client.PullImage(imageName, authConfig); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	hostConfig := &dockerclient.HostConfig{
